@@ -1,6 +1,6 @@
 # Esurfing client for Lua
 
-[luci-app-esurfing-client](https://github.com/OpenWyu/luci-app-esurfing-client)**(暂未开源)**的单文件版本, 可独立运行
+[luci-app-esurfing-client](https://github.com/OpenWyu/luci-app-esurfing-client)(暂未开源)的单文件版本, 可独立运行
 
 ## 依赖
 
