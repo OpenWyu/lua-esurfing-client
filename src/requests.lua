@@ -37,7 +37,7 @@ function requests.get(reqt)
     return nil
   end
   
-  return code, response_headers, response_body
+  return code, response_headers, table.concat(response_body)
 end
 
 function requests.post(reqt)
@@ -65,7 +65,7 @@ function requests.post(reqt)
     return nil
   end
   
-  return code, response_headers, response_body
+  return code, response_headers, table.concat(response_body)
 end
 
 function requests.json(reqt)
