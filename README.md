@@ -1,6 +1,15 @@
 # Esurfing client for Lua
 
-[luci-app-esurfing-client](https://github.com/OpenWyu/luci-app-esurfing-client)(暂未开源)的单文件版本, 可独立运行
+[luci-app-esurfing-client](https://github.com/OpenWyu/luci-app-esurfing-client)(暂未开源)的可独立运行的单文件版本
+
+## 功能
+
+- 一键登录/注销网络(提供命令行和配置文件两种方式)
+- 定时保活(与外界通信进行保活)
+- 免打扰模式(免打扰时间段内不会执行脚本, 一般结合定时保活功能使用)
+  > **注意: 如果你的路由器支持定时关机的操作, 无需使用该功能**
+- 较为详尽的日志记录(同时支持标准输出)
+- 基本兼容[luci-app-esurfing-client](https://github.com/OpenWyu/luci-app-esurfing-client)的主脚本程序
 
 ## 依赖
 
@@ -52,7 +61,7 @@ lua esurfing-client.lua logout <username>
 
 ### 修改配置后直接运行
 
-修改 `src` 目录下的 `main.lua` 文件里的**用户自定义参数**
+修改 `src` 目录下的 `main.lua` 文件里的**用户自定义参数**(直接搜索`用户自定义参数`即可找到)
 
 然后可试执行:
 
@@ -75,10 +84,13 @@ lua ./bin/esurfing-client.lua
 1. 单路由器的方法实际上无需设置关闭 DHCP
 2. 单路由器的方法若一段时间内没有任何设备连接上WiFi, 会导致该网络需要重新登录. 而双路由器的方法实际上主路由器是作为了一个连上了的终端设备存在的, 只需在同时, 你的主路由器每隔一段时间与外部进行通信, 比如使用`luci-app-bypass`之类的插件, 这样就可以一直保持登录状态了
 
+> 目前v1.1.0版本已实现定时保活的功能(默认是5分钟/次), 对于使用双路由器方法的用户无需开启以免浪费资源, 使用单路由器方法的用户建议开启.
+
 ### 其他建议
 
 - **强烈建议**路由器的对应 WAN 口的 MAC 地址(对应配置项里的`macaddr`)改成 Android 手机的 MAC 地址, 这样你还能用[安卓端](https://github.com/OpenWyu/SchoolAuthentication)进行登录
-- **强烈建议**在工作日恢复网络后(比如早上6点半)定时重启路由器(`luci-app-autoreboot`), 用以刷新网络状态
+- **强烈建议**在工作日恢复网络后(比如早上6:30)定时重启路由器(`luci-app-autoreboot`), 用以刷新网络状态
+- **强烈建议**设置免打扰模式的结束时间早于定时重启的时间(比如早上6:00), 这是因为目前免打扰模式的时间判断最小单位是分钟, 时间一样会导致程序错误判断当前还未退出免打扰模式
 - 实测有的时候网络会莫名其妙地断开, 对于高级用户, 需要安装`luci-app-serverchan`这样的插件来监控网络状况, 无法联网时应当考虑通知用户重启路由器(路由器远程控制重启或者物理重启)
 
 ## 二次开发
@@ -89,13 +101,19 @@ lua ./bin/esurfing-client.lua
 
 ```shell
 cd ./src
-lua ./amalg.lua -o ../bin/esurfing-client.lua -s ./main.lua requests utils json md5
+lua ./amalg.lua -o ../bin/esurfing-client.lua -s ./main.lua requests utils json md5 log
 ```
 
 ## TODO
 
-- [ ] 加入定时保活功能
-- [ ] 加入免打扰功能(免打扰时间段内不会进行发包保活的操作)
+- [x] 加入定时保活功能
+- [x] 加入免打扰功能(免打扰时间段内会自动退出保活协程)
+- [x] 免打扰时间段添加星期范围的设置
+- [x] 脚本兼容项目 `luci-app-esurfing-client` 的主脚本程序
+
+## 目前存在的问题
+
+- 某些时候网络会有问题, 保活协程应提供失败重试多次的子功能
 
 ## 相关项目
 
