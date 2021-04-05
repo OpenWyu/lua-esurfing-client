@@ -129,4 +129,4 @@ lua ./amalg.lua -o ../bin/esurfing-client.lua -s ./main.lua requests utils json 
 - https://github.com/rufengsuixing/luci-app-adguardhome
 - https://github.com/frainzy1477/luci-app-clash
 - https://github.com/siffiejoe/lua-amalg
-
+- https://github.com/rxi/log.lua
