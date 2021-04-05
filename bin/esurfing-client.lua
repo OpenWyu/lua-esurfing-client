@@ -396,6 +396,101 @@ end
 
 do
 local _ENV = _ENV
+package.preload[ "log" ] = function( ... ) local arg = _G.arg;
+--
+-- log.lua
+--
+-- Copyright (c) 2016 rxi
+--
+-- This library is free software; you can redistribute it and/or modify it
+-- under the terms of the MIT license. See LICENSE for details.
+--
+
+local log = { _version = "0.1.0" }
+
+log.usecolor = true
+log.outfile = nil
+log.level = "debug"
+
+
+local modes = {
+  { name = "debug",   color = "\27[36m", prefix = "DEBUG" },
+  { name = "success", color = "\27[32m", prefix = "+" },
+  { name = "failure",   color = "\27[31m", prefix = "-" },
+  { name = "info",    color = "\27[32m", prefix = "*" },
+  { name = "warn",    color = "\27[33m", prefix = "!" },
+}
+
+
+local levels = {}
+for i, v in ipairs(modes) do
+  levels[v.name] = i
+end
+
+
+local round = function(x, increment)
+  increment = increment or 1
+  x = x / increment
+  return (x > 0 and math.floor(x + .5) or math.ceil(x - .5)) * increment
+end
+
+
+local _tostring = tostring
+
+local tostring = function(...)
+  local t = {}
+  for i = 1, select('#', ...) do
+    local x = select(i, ...)
+    if type(x) == "number" then
+      x = round(x, .01)
+    end
+    t[#t + 1] = _tostring(x)
+  end
+  return table.concat(t, " ")
+end
+
+
+for i, x in ipairs(modes) do
+  local nameupper = x.name:upper()
+  local prefix = x.prefix
+  log[x.name] = function(...)
+    
+    -- Return early if we're below the log level
+    if i < levels[log.level] then
+      return
+    end
+
+    local msg = tostring(...)
+    local info = debug.getinfo(2, "Sl")
+    local lineinfo = info.short_src .. ":" .. info.currentline
+
+    -- Output to console
+    print(string.format("%s[%s][%s]%s %s",
+                        log.usecolor and x.color or "",
+                        prefix,
+                        os.date("%H:%M:%S"),
+                        log.usecolor and "\27[0m" or "",
+                        msg))
+
+    -- Output to log file
+    if log.outfile then
+      local fp = io.open(log.outfile, "a")
+      local str = string.format("[%s][%s] %s: %s\n",
+                                nameupper, os.date("%Y-%m-%d %H:%M:%S"), lineinfo, msg)
+      fp:write(str)
+      fp:close()
+    end
+
+  end
+end
+
+
+return log
+end
+end
+
+do
+local _ENV = _ENV
 package.preload[ "md5" ] = function( ... ) local arg = _G.arg;
 local md5 = {
   _VERSION     = "md5.lua 1.1.0",
@@ -844,7 +939,7 @@ function requests.get(reqt)
     return nil
   end
   
-  return code, response_headers, response_body
+  return code, response_headers, table.concat(response_body)
 end
 
 function requests.post(reqt)
@@ -872,7 +967,7 @@ function requests.post(reqt)
     return nil
   end
   
-  return code, response_headers, response_body
+  return code, response_headers, table.concat(response_body)
 end
 
 function requests.json(reqt)
@@ -915,6 +1010,7 @@ do
 local _ENV = _ENV
 package.preload[ "utils" ] = function( ... ) local arg = _G.arg;
 local md5 = require "md5"
+local socket = require "socket"
 
 utils = {}
 
@@ -926,6 +1022,43 @@ function utils.get_login_authenticator(clientip, nasip, macaddr, timestamp, vcod
   return string.upper(md5.sumhexa(clientip .. nasip .. macaddr .. timestamp .. vcode .. secretkey))
 end
 
+function utils.get_current_time()
+  return os.date("%H:%M")
+end
+
+function utils.get_current_week()
+  return tonumber(os.date("%w"))
+end
+
+local function parse_time(str)
+  local hour, min = str:match("(%d+):(%d+)")
+  return hour * 60 + min
+end
+
+function utils.is_time_between(time, start, stop)
+  local _time = parse_time(time)
+  local _start = parse_time(start)
+  local _stop = parse_time(stop)
+  
+  if _stop < _start then
+    return _start <= _time or _time <= _stop
+  end
+  return _start <= _time and _time <= _stop
+end
+
+function utils.is_array_contains(array, element)
+  for _, value in ipairs(array) do
+    if value == element then
+      return true
+    end
+  end
+  return false
+end
+
+function utils.sleep(sec)
+  socket.select(nil, nil, sec)
+end
+
 
 return utils
 end
@@ -934,30 +1067,54 @@ end
 
 
 local mime        = require "mime"
+
 local requests    = require "requests"
 local utils       = require "utils"
+local log         = require "log"
+
+log.outfile = "./test.log"
+log.usecolor = false
+log.level = "debug"
 
 local unpack = unpack or table.unpack
 
 -- 用户自定义参数 begin
-local command     = ""
 
-local username    = ""
-local password    = ""
-local clientip    = ""
+-- 命令字符串 值只能是 "login" 或 "logout"
+local command      = ""
+
+-- 是否开启定时保活功能 默认开启 使用双路由器方法的用户无需开启
+local keepalive_enabled = true
+-- 保活协程检查周期(秒) 默认5分钟 实测应低于10分钟才不会断连
+local keepalive_interval = 5 * 60
+
+-- 免打扰模式 默认关闭
+local donotdisturb = true
+-- 免打扰模式启用的星期范围 [0 - 6 = 星期天 - 星期六]
+-- 默认值适用于星期天到星期四晚上11点半断网, 第二天早上6点恢复
+local dndweekrange = {0, 1, 2, 3, 4}
+-- 免打扰模式开始时间(hh:mm)
+local dndstarttime = "23:30"
+-- 免打扰模式结束时间(hh:mm)
+local dndstoptime  = "06:00"
+
+local username     = ""
+local password     = ""
+local clientip     = ""
 -- MAC地址格式为XX:XX:XX:XX:XX:XX
-local macaddr     = ""
+local macaddr      = ""
 -- 以下三个变量对同一学校而言可认为是固定常数
-local nasip       = "119.146.175.80"
-local schoolid    = "1414"
-local secretkey   = "Eshore!@#"
+local nasip        = "119.146.175.80"
+local schoolid     = "1414"
+local secretkey    = "Eshore!@#"
+
 -- 用户自定义参数 end
 
-local cookie      = ""
-local vcode       = ""
+local cookie       = ""
+local vcode        = ""
 
 function check_network_status()
-  local code, response_headers, response_body = requests.get {
+  local code, _, _ = requests.get {
     url = "http://172.17.18.3:8080/portal/",
     headers = {
       ["Accept"] = "application/signed-exchange"
@@ -965,16 +1122,16 @@ function check_network_status()
   }
   
   if code == 200 or code == 302 then
-    print("[*] 已连接到校园网")
+    log.info("已连接到校园网")
     return true
   end
   
-  print("[-] 未连接到校园网, 请检查网络")
+  log.failure("[-] 未连接到校园网, 请检查网络")
   return false
 end
 
 function portal_login()
-  local code, response_headers, response_body = requests.post {
+  local code, _, _ = requests.post {
     url = "http://172.17.18.3:8080/portal/pws?t=li&ifEmailAuth=false",
     headers = {
       ["Accept"] = "application/signed-exchange"
@@ -983,17 +1140,17 @@ function portal_login()
   }
   
   if code == 200 then
-    print("[*] 已发包进行portal服务认证, 1秒后再次尝试登录")
+    log.info("已发包进行portal服务认证, 1秒后再次尝试登录")
     return true
   end
   
-  print("[-] portal服务认证失败, 请检查网络")
+  log.failure("portal服务认证失败, 请检查网络")
   return false
 end
 
 function query_schoolid()
   local timestamp = os.time() * 1000
-  local code, response_headers, response_body = requests.json {
+  local code, _, response_body = requests.json {
     url = "http://enet.10000.gd.cn:10001/client/queryschool",
     body = {
       clientip = clientip,
@@ -1006,33 +1163,33 @@ function query_schoolid()
   
   if code == 200 and response_body["rescode"] == "0" then
     schoolid = response_body["schoolid"]
-    print("[*] schoolid: " .. schoolid)
+    log.debug("schoolid: " .. schoolid)
     return true
   end
   
-  print("[-] 获取schoolid失败, 请检查网络")
+  log.failure("获取schoolid失败, 请检查网络")
   return false
 end
 
 function get_enet_cookie()
-  local code, response_headers, response_body = requests.get {
+  local code, response_headers, _ = requests.get {
     url = "http://enet.10000.gd.cn:10001/advertisement.do",
     body = string.format([[schoolid=%s]], schoolid)
   }
   
   if code == 200 then
     cookie = response_headers["set-cookie"]
-    print("[*] cookie: " .. cookie)
+    log.debug("cookie: " .. cookie)
     return true
   end
   
-  print("[-] 获取认证cookie失败, 请检查网络")
+  log.failure("获取认证cookie失败, 请检查网络")
   return false
 end
 
 function get_vcode()
   local timestamp = os.time() * 1000
-  local code, response_headers, response_body = requests.json {
+  local code, _, response_body = requests.json {
     url = "http://enet.10000.gd.cn:10001/client/challenge",
     cookie = cookie,
     body = {
@@ -1047,17 +1204,17 @@ function get_vcode()
   
   if code == 200 and response_body["rescode"] == "0" then
     vcode = response_body["challenge"]
-    print("[*] vcode: " .. vcode)
+    log.debug("vcode: " .. vcode)
     return true
   end
   
-  print("[-] 获取vcode失败, 请检查网络或确定登录信息是否正确")
+  log.failure("获取vcode失败, 请检查网络或确定登录信息是否正确")
   return false
 end
 
 function enet_login()
   local timestamp = os.time() * 1000
-  local code, response_headers, response_body = requests.json {
+  local code, _, response_body = requests.json {
     url = "http://enet.10000.gd.cn:10001/client/login",
     cookie = cookie,
     body = {
@@ -1073,17 +1230,17 @@ function enet_login()
   }
   
   if code == 200 and response_body["rescode"] == "0" then
-    print("[+] 登录成功 - " .. response_body["resinfo"])
+    log.success("登录成功 - " .. response_body["resinfo"])
     return true
   end
   
-  print("[-] 登录失败, 请检查网络或确定登录信息是否正确")
+  log.failure("登录失败, 请检查网络或确定登录信息是否正确")
   return false
 end
 
 function enet_logout()
   local timestamp = os.time() * 1000
-  local code, response_headers, response_body = requests.json {
+  local code, _, response_body = requests.json {
     url = "http://enet.10000.gd.cn:10001/client/logout",
     cookie = cookie,
     body = {
@@ -1097,68 +1254,88 @@ function enet_logout()
   }
   
   if code == 200 and response_body["rescode"] == "0" then
-    print("[+] 注销成功 - " .. response_body["resinfo"])
+    log.success("注销成功 - " .. response_body["resinfo"])
     return true
   end
   
-  print("[-] 注销失败, 请检查网络或确定登录信息是否正确")
+  log.failure("注销失败, 请检查网络或确定登录信息是否正确")
   return false
 end
 
--- 未被使用
-function enet_keepalive()
-  local timestamp = os.time() * 1000
-  local code, response_headers, response_body = requests.get {
-    url = "http://enet.10000.gd.cn:8001/hbservice/client/active",
-    body = string.format([[username=%s&clientip=%s&nasip=%s&mac=%s&timestamp=%s&authenticator=%s]], username, clientip, nasip, macaddr, timestamp, utils.get_normal_authenticator(clientip, nasip, macaddr, timestamp, secretkey))
-  }
+function keepalive_coroutine()
+  return coroutine.create(function()
+    local i = 1
+    while true do
+      log.info("正在进行第" .. i .. "次保活操作")
+      
+      local status = check_network_status()
+      
+      if not status then
+        return
+      end
   
-  if code == 200 and response_body["rescode"] == "0" then
-    print("[*] 维持连接成功 - " .. response_body["resinfo"])
-    return true
-  end
-  
-  print("[-] 维持连接失败")
-  return false
-  
+      login()
+      
+      coroutine.yield(status)
+      utils.sleep(keepalive_interval)
+      i = i + 1
+    end
+    
+  end)
+end
+
+function keepalive()
+  local co = keepalive_coroutine()
+  repeat
+    if donotdisturb then
+      local current_week = utils.get_current_week()
+      if utils.is_array_contains(dndweekrange, current_week) then
+        local current_time = utils.get_current_time()
+        if utils.is_time_between(current_time, dndstarttime, dndstoptime) then
+          break
+        end
+      end
+    end
+    local _, status = coroutine.resume(co)
+  until not status
 end
 
 function login()
-  local code, response_headers, response_body = requests.get {
+  local code, response_headers, _ = requests.get {
     url = "http://www.qq.com"
   }
   
   if not code then
-    print("[-] 无法连接外网, 可能是退出登录后网络状态未刷新")
+    log.failure("无法连接外网, 可能是退出登录后网络状态未刷新")
     return
   end
 
   if code == 302 then
     local location = response_headers["location"]
     if location == "https://www.qq.com/" then
-      print("[+] 当前设备已登录")
+      log.success("当前设备已登录")
       return
     end
     
-    print("[*] 当前校园网环境为有线网络环境")
+    log.info("当前校园网环境为有线网络环境")
     
     if location:match("172.17.18.3:8080") then
-      print("[*] 检测到需要portal服务认证")
+      log.info("检测到需要portal服务认证")
       if portal_login() then
         login()
       end
       return
     end
     
-    print("[*] 获取到重定向地址为 " .. location)
+    log.debug("获取到重定向地址为 " .. location)
     
     if clientip == "" or nasip == "" then
       clientip, nasip = location:match("wlanuserip=(.+)&wlanacip=(.+)")
     end
 
-    print("[*] clientip: " .. clientip)
-    print("[*] nasip: " .. nasip)
-    print("[*] macaddr: " .. macaddr)
+    log.debug("clientip: " .. clientip)
+    log.debug("nasip: " .. nasip)
+    log.debug("macaddr: " .. macaddr)
     
     if not query_schoolid() then
       return
@@ -1178,8 +1355,8 @@ function login()
     
     
   elseif code == 200 then
-    print("[*] 当前校园网环境为无线WiFi环境")
-    print("[*] 暂未实现该环境的登录, 请切换到有线宽带登录")
+    log.info("当前校园网环境为无线WiFi环境")
+    log.info("暂未实现该环境的登录, 请切换到有线宽带登录")
     return
   end
 end
@@ -1197,6 +1374,20 @@ end
 
 function main()
   print("======================")
+  
+  if donotdisturb then
+    log.info("已开启免打扰模式")
+    local current_week = utils.get_current_week()
+    if utils.is_array_contains(dndweekrange, current_week) then
+      local current_time = utils.get_current_time()
+      if utils.is_time_between(current_time, dndstarttime, dndstoptime) then
+        log.failure("免打扰时间段内脚本不会运行")
+        return
+      end
+    end
+    log.info("当前非免打扰时间段, 脚本将继续执行")
+  end
+  
   if #arg == 0 then
     if command == "" or username == "" then
       help()
@@ -1212,7 +1403,7 @@ function main()
   if #arg == 2 then
     command, username = unpack(arg)
     if command == "login" then
-      print("[-] 登录需要提供密码")
+      log.failure("登录需要提供密码")
       return
     end
   elseif #arg == 3 then
@@ -1230,7 +1421,7 @@ function main()
   end
   
   if macaddr == "" then
-    print("[-] 登录需要提供登录设备 WAN 接口的 MAC 地址")
+    log.failure("登录需要提供登录设备 WAN 接口的 MAC 地址")
     return
     --[[
     *可选*
@@ -1259,10 +1450,13 @@ function main()
   end
   
   if command == "login" then
-    print("[*] 正在尝试进行登录中...")
+    log.info("正在尝试进行登录中...")
     login()
+    if keepalive_enabled then
+      keepalive()
+    end
   elseif command == "logout" then
-    print("[*] 正在尝试进行注销中...")
+    log.info("正在尝试进行注销中...")
     enet_logout()
   end
 end
