@@ -24,7 +24,7 @@
 
 #### 对于 Linux/Mac 用户
 
-不解释
+安装`lua`以及`luarocks`依赖
 
 ## 下载方法
 
@@ -103,13 +103,6 @@ lua ./bin/esurfing-client.lua
 cd ./src
 lua ./amalg.lua -o ../bin/esurfing-client.lua -s ./main.lua requests utils json md5 log
 ```
-
-## TODO
-
-- [x] 加入定时保活功能
-- [x] 加入免打扰功能(免打扰时间段内会自动退出保活协程)
-- [x] 免打扰时间段添加星期范围的设置
-- [x] 脚本兼容项目 `luci-app-esurfing-client` 的主脚本程序
 
 ## 目前存在的问题
 
