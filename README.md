@@ -9,7 +9,7 @@
 - 免打扰模式(免打扰时间段内不会执行脚本, 一般结合定时保活功能使用)
   > **注意: 如果你的路由器支持定时关机的操作, 无需使用该功能**
 - 较为详尽的日志记录(同时支持标准输出)
-- 基本兼容[luci-app-esurfing-client](https://github.com/OpenWyu/luci-app-esurfing-client)的主脚本程序(仅需修改两处)
+- 基本兼容[luci-app-esurfing-client](https://github.com/OpenWyu/luci-app-esurfing-client)的主脚本程序(仅需修改两处 [1](https://github.com/OpenWyu/lua-esurfing-client/compare/openwrt#diff-f10850f6cf7d31487b477962576376fe3d1a50d7a0f8b77724257fb51917ce04R9) [2](https://github.com/OpenWyu/lua-esurfing-client/compare/openwrt#diff-f10850f6cf7d31487b477962576376fe3d1a50d7a0f8b77724257fb51917ce04R358-R367))
 
 ## 依赖
 
@@ -77,7 +77,7 @@ lua ./bin/esurfing-client.lua
 
 ## 路由器上的使用建议(OpenWrt)
 
-参考 [openwrt](https://github.com/OpenWyu/lua-esurfing-client/tree/openwrt) 分支
+参考 [openwrt](https://github.com/OpenWyu/lua-esurfing-client/tree/openwrt#%E8%B7%AF%E7%94%B1%E5%99%A8%E4%B8%8A%E7%9A%84%E4%BD%BF%E7%94%A8%E5%BB%BA%E8%AE%AEopenwrt) 分支
 
 ## 二次开发
 
