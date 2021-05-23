@@ -1072,7 +1072,7 @@ local requests    = require "requests"
 local utils       = require "utils"
 local log         = require "log"
 
-log.outfile = "./test.log"
+log.outfile = "/tmp/esurfing-client/esurfing-client.log"
 log.usecolor = false
 log.level = "debug"
 
@@ -1421,24 +1421,16 @@ function main()
   end
   
   if macaddr == "" then
-    log.failure("登录需要提供登录设备 WAN 接口的 MAC 地址")
-    return
-    --[[
-    *可选*
-    你可在此处自行实现相应平台获取对应WAN口的MAC地址和IP地址的功能
-    这是防止某天从portal获取clientip失效的备用方案, 同时也是自动获取MAC地址的方案
-    以下注释代码为OpenWrt平台下的Luci实现
-    --]]
-    -- local nwm = require "luci.model.network".init()
-    -- local networks = nwm:get_wan_networks()
-    -- for _, net in ipairs(networks) do
-    --   local mac = net:get_interface():mac()
-    --   macaddr = mac:gsub(":", "-")
-          
-    --   if command == "logout" then
-    --     clientip = net:ipaddr()
-    --   end
-    -- end
+    local nwm = require "luci.model.network".init()
+    local networks = nwm:get_wan_networks()
+    for _, net in ipairs(networks) do
+      local mac = net:get_interface():mac()
+      macaddr = mac:gsub(":", "-")
+
+      if command == "logout" then
+        clientip = net:ipaddr()
+      end
+    end
   else
     macaddr = macaddr:gsub(":", "-")
   end
