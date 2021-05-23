@@ -1,6 +1,6 @@
 # Esurfing client for Lua
 
-[luci-app-esurfing-client](https://github.com/OpenWyu/luci-app-esurfing-client)(暂未开源)的可独立运行的单文件版本
+[luci-app-esurfing-client](https://github.com/OpenWyu/luci-app-esurfing-client)(暂未开源)的主脚本程序
 
 ## 功能
 
@@ -9,7 +9,6 @@
 - 免打扰模式(免打扰时间段内不会执行脚本, 一般结合定时保活功能使用)
   > **注意: 如果你的路由器支持定时关机的操作, 无需使用该功能**
 - 较为详尽的日志记录(同时支持标准输出)
-- 基本兼容[luci-app-esurfing-client](https://github.com/OpenWyu/luci-app-esurfing-client)的主脚本程序
 
 ## 依赖
 
@@ -114,12 +113,7 @@ lua ./amalg.lua -o ../bin/esurfing-client.lua -s ./main.lua requests utils json 
 
 ## 参考文章/项目
 
-- https://www.cnblogs.com/mayswind/p/3468124.html
-- https://iyzm.net/openwrt/624.html
 - https://github.com/6DDUU6/SchoolAuthentication
 - https://github.com/Dire-CPU/lua_esurfing
-- https://github.com/mayswind/luci-app-njitclient
-- https://github.com/rufengsuixing/luci-app-adguardhome
-- https://github.com/frainzy1477/luci-app-clash
 - https://github.com/siffiejoe/lua-amalg
 - https://github.com/rxi/log.lua
