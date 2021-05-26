@@ -1,6 +1,6 @@
 # Esurfing client for Lua
 
-[luci-app-esurfing-client](https://github.com/OpenWyu/luci-app-esurfing-client)(暂未开源)的可独立运行的主脚本程序
+[luci-app-esurfing-client](https://github.com/OpenWyu/luci-app-esurfing-client)的可独立运行的主脚本程序
 
 ## 功能
 
