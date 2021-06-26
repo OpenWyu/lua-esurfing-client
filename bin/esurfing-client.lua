@@ -1430,14 +1430,12 @@ function main()
     以下注释代码为OpenWrt平台下的Luci实现
     --]]
     -- local nwm = require "luci.model.network".init()
-    -- local networks = nwm:get_wan_networks()
-    -- for _, net in ipairs(networks) do
-    --   local mac = net:get_interface():mac()
-    --   macaddr = mac:gsub(":", "-")
-          
-    --   if command == "logout" then
-    --     clientip = net:ipaddr()
-    --   end
+    -- local wandev = nwm:get_wandev()
+
+    -- macaddr = wandev:mac():gsub(":", "-")
+
+    -- if command == "logout" then
+    --   clientip = wandev:get_network():ipaddr()
     -- end
   else
     macaddr = macaddr:gsub(":", "-")
